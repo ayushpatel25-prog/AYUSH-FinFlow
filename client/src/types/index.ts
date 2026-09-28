@@ -202,6 +202,7 @@ export interface Loan {
   computedStatus: string;
   totalPaidPaise: number;
   payments?: LoanPayment[];
+  receipts?: Receipt[];
 }
 
 export interface LoansSummary {

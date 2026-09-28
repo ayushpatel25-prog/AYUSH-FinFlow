@@ -10,6 +10,10 @@ export async function getLoansSummary(userId: string) {
       payments: {
         orderBy: { date: 'desc' },
       },
+      receipts: {
+        include: { emailHistory: { orderBy: { createdAt: 'desc' } } },
+        orderBy: { createdAt: 'desc' },
+      },
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -145,12 +149,15 @@ export async function createLoan(userId: string, data: {
     return loan;
   });
 
-  // Auto-generate receipt — fire-and-forget, does not block response
-  createLoanReceipt(userId, result.id).catch((err) =>
-    console.error('[LoanService] Receipt generation failed:', err)
-  );
+  // Generate receipt synchronously so it is available immediately in the API response
+  let receipt = null;
+  try {
+    receipt = await createLoanReceipt(userId, result.id);
+  } catch (err) {
+    console.error('[LoanService] Receipt generation failed:', err);
+  }
 
-  return result;
+  return { ...result, receipt };
 }
 
 export async function addLoanPayment(userId: string, loanId: string, data: {
@@ -245,12 +252,15 @@ export async function addLoanPayment(userId: string, loanId: string, data: {
     return payment;
   });
 
-  // Auto-generate repayment receipt — fire-and-forget
-  createRepaymentReceipt(userId, loanId, paymentResult.id).catch((err) =>
-    console.error('[LoanService] Repayment receipt generation failed:', err)
-  );
+  // Generate repayment receipt synchronously so it is available immediately
+  let receipt = null;
+  try {
+    receipt = await createRepaymentReceipt(userId, loanId, paymentResult.id);
+  } catch (err) {
+    console.error('[LoanService] Repayment receipt generation failed:', err);
+  }
 
-  return paymentResult;
+  return { ...paymentResult, receipt };
 }
 
 export async function deleteLoan(userId: string, loanId: string) {
