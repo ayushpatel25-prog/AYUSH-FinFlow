@@ -16,7 +16,8 @@ import type {
 } from '../types/index.js';
 
 // If VITE_API_URL is set (e.g. deployed on Vercel connecting to Render/Railway), use it; otherwise default to '/api'
-const API_HOST = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/$/, '') : '';
+const envApiUrl = (import.meta as any).env?.VITE_API_URL || '';
+const API_HOST = typeof envApiUrl === 'string' ? envApiUrl.replace(/\/$/, '') : '';
 const BASE_URL = `${API_HOST}/api`;
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
