@@ -157,6 +157,14 @@ export async function createRepaymentReceipt(
   return receipt;
 }
 
+function formatPdfCurrency(paise: number): string {
+  const rupees = (paise / 100).toLocaleString('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `Rs. ${rupees}`;
+}
+
 // ─── PDF Generation ───────────────────────────────────────────────────────────
 export async function generateAndSavePDF(receiptId: string): Promise<string> {
   const receipt = await prisma.receipt.findUnique({ where: { id: receiptId } });
@@ -192,11 +200,11 @@ export async function generateAndSavePDF(receiptId: string): Promise<string> {
     doc.fillColor('#f8fafc').rect(60, y, W, 75).fill();
     doc.strokeColor('#cbd5e1').lineWidth(1.5).rect(60, y, W, 75).stroke();
 
-    doc.fillColor('#64748b').fontSize(8).font('Helvetica-Bold')
+    doc.fillColor('#475569').fontSize(8.5).font('Helvetica-Bold')
       .text('TOTAL AMOUNT', 80, y + 14);
     doc.fillColor('#0f172a').fontSize(26).font('Helvetica-Bold')
-      .text(formatINR(receipt.amountPaise), 80, y + 28);
-    doc.fillColor('#475569').fontSize(8.5).font('Helvetica')
+      .text(formatPdfCurrency(receipt.amountPaise), 80, y + 28);
+    doc.fillColor('#64748b').fontSize(8.5).font('Helvetica')
       .text(`Receipt #: ${receipt.receiptNumber}`, 80, y + 56, { align: 'right' });
 
     y += 95;
@@ -207,7 +215,7 @@ export async function generateAndSavePDF(receiptId: string): Promise<string> {
     const fieldH = 26;
 
     function field(label: string, value: string, x: number, fy: number, valueColor = '#0f172a') {
-      doc.fillColor('#64748b').fontSize(8).font('Helvetica-Bold').text(label.toUpperCase(), x, fy);
+      doc.fillColor('#475569').fontSize(8).font('Helvetica-Bold').text(label.toUpperCase(), x, fy);
       doc.fillColor(valueColor).fontSize(11).font('Helvetica-Bold').text(value, x, fy + 11);
     }
 
@@ -224,7 +232,7 @@ export async function generateAndSavePDF(receiptId: string): Promise<string> {
     y += fieldH + 4;
 
     // Principal & Due Date
-    field('Principal Amount', formatINR(meta.principalPaise), colL, y, '#0f172a');
+    field('Principal Amount', formatPdfCurrency(meta.principalPaise), colL, y, '#0f172a');
     if (meta.dueDate) {
       field('Due Date', new Date(meta.dueDate).toLocaleDateString('en-IN', {
         day: '2-digit', month: 'short', year: 'numeric'
@@ -233,12 +241,12 @@ export async function generateAndSavePDF(receiptId: string): Promise<string> {
     y += fieldH + 4;
 
     if (receipt.type === 'REPAYMENT' || receipt.type === 'SETTLEMENT') {
-      field('Principal Part Repaid', formatINR(meta.principalPartPaise || 0), colL, y, '#0f172a');
-      field('Interest Part', formatINR(meta.interestPartPaise || 0), colR, y, '#0f172a');
+      field('Principal Part Repaid', formatPdfCurrency(meta.principalPartPaise || 0), colL, y, '#0f172a');
+      field('Interest Part', formatPdfCurrency(meta.interestPartPaise || 0), colR, y, '#0f172a');
       y += fieldH + 4;
 
       const remainColor = meta.remainingPaise <= 0 ? '#059669' : '#d97706';
-      field('Remaining Balance', formatINR(meta.remainingPaise), colL, y, remainColor);
+      field('Remaining Balance', formatPdfCurrency(meta.remainingPaise), colL, y, remainColor);
       field('Settlement Status', meta.isSettlement ? 'FULLY SETTLED ✓' : 'PARTIALLY PAID', colR, y,
         meta.isSettlement ? '#059669' : '#d97706');
       y += fieldH + 4;
