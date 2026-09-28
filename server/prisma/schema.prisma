@@ -1,0 +1,429 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id              String         @id @default(cuid())
+  email           String         @unique
+  passwordHash    String
+  name            String
+  currency        String         @default("INR")
+  currencySymbol  String         @default("₹")
+  accentColor     String         @default("emerald")
+  theme           String         @default("dark")
+  monthlyIncomePaise Int         @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  accounts        Account[]
+  categories      Category[]
+  transactions    Transaction[]
+  budgets         Budget[]
+  goals           Goal[]
+  goalContributions GoalContribution[]
+  trips           Trip[]
+  tripExpenses    TripExpense[]
+  loans           Loan[]
+  loanPayments    LoanPayment[]
+  bills           Bill[]
+  notifications   Notification[]
+  insights        AIInsight[]
+  auditEvents     AuditEvent[]
+  receipts        Receipt[]
+  receiptEmails   ReceiptEmail[]
+
+  @@index([email])
+}
+
+model Account {
+  id                  String        @id @default(cuid())
+  userId              String
+  name                String
+  type                String        // BANK, CASH, WALLET, CREDIT_CARD, INVESTMENT, OTHER
+  openingBalancePaise Int           @default(0)
+  currentBalancePaise Int           @default(0)
+  color               String        @default("#10b981")
+  icon                String        @default("wallet")
+  isActive            Boolean       @default(true)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions        Transaction[] @relation("AccountTransactions")
+  targetTransfers     Transaction[] @relation("TransferToAccount")
+  goalContributions   GoalContribution[]
+  bills               Bill[]
+
+  @@index([userId])
+  @@index([type])
+}
+
+model Category {
+  id          String        @id @default(cuid())
+  userId      String?
+  name        String
+  type        String        // EXPENSE, INCOME
+  icon        String        @default("tag")
+  color       String        @default("#64748b")
+  isSystem    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+
+  user        User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  splits      TransactionSplit[]
+  budgets     Budget[]
+
+  @@index([userId])
+  @@index([type])
+}
+
+model Transaction {
+  id                  String             @id @default(cuid())
+  userId              String
+  accountId           String
+  toAccountId         String?            // for transfers
+  categoryId          String?
+  tripId              String?
+  goalId              String?
+  loanId              String?
+  type                String             // INCOME, EXPENSE, TRANSFER, LEND, BORROW, LOAN_REPAYMENT, TRIP_EXPENSE, GOAL_CONTRIBUTION
+  amountPaise         Int
+  date                DateTime
+  description         String
+  notes               String?
+  person              String?
+  tags                String?            // comma-separated tags
+  receiptUrl          String?
+  isRecurring         Boolean            @default(false)
+  recurringFrequency  String?            // WEEKLY, MONTHLY, YEARLY
+  status              String             @default("COMPLETED") // COMPLETED, PENDING, ARCHIVED
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account             Account            @relation("AccountTransactions", fields: [accountId], references: [id], onDelete: Cascade)
+  toAccount           Account?           @relation("TransferToAccount", fields: [toAccountId], references: [id], onDelete: SetNull)
+  category            Category?          @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  trip                Trip?              @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  goal                Goal?              @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  loan                Loan?              @relation(fields: [loanId], references: [id], onDelete: SetNull)
+  splits              TransactionSplit[]
+
+  @@index([userId])
+  @@index([accountId])
+  @@index([categoryId])
+  @@index([tripId])
+  @@index([loanId])
+  @@index([date])
+  @@index([type])
+  @@index([status])
+}
+
+model TransactionSplit {
+  id            String       @id @default(cuid())
+  transactionId String
+  categoryId    String
+  amountPaise   Int
+  notes         String?
+
+  transaction   Transaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  category      Category     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId])
+  @@index([categoryId])
+}
+
+model Budget {
+  id                    String    @id @default(cuid())
+  userId                String
+  categoryId            String?   // null means overall total budget
+  period                String    @default("MONTHLY") // MONTHLY, WEEKLY, CUSTOM
+  amountPaise           Int
+  alertThresholdPercent Int       @default(80)
+  startDate             DateTime  @default(now())
+  endDate               DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category              Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([categoryId])
+}
+
+model Goal {
+  id                  String             @id @default(cuid())
+  userId              String
+  name                String
+  category            String             @default("Savings")
+  targetAmountPaise   Int
+  currentAmountPaise  Int                @default(0)
+  targetDate          DateTime
+  priority            String             @default("MEDIUM") // HIGH, MEDIUM, LOW
+  status              String             @default("ON_TRACK") // ON_TRACK, AT_RISK, BEHIND, COMPLETED
+  color               String             @default("#3b82f6")
+  icon                String             @default("target")
+  notes               String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contributions       GoalContribution[]
+  transactions        Transaction[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([priority])
+}
+
+model GoalContribution {
+  id            String      @id @default(cuid())
+  goalId        String
+  userId        String
+  accountId     String?
+  amountPaise   Int
+  date          DateTime    @default(now())
+  notes         String?
+  createdAt     DateTime    @default(now())
+
+  goal          Goal        @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account       Account?    @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@index([goalId])
+  @@index([userId])
+}
+
+model Trip {
+  id                String               @id @default(cuid())
+  userId            String
+  name              String
+  destination       String
+  startDate         DateTime
+  endDate           DateTime
+  travelers         Int                  @default(1)
+  currency          String               @default("INR")
+  targetBudgetPaise Int
+  savedAmountPaise  Int                  @default(0)
+  status            String               @default("PLANNING") // PLANNING, SAVING, ACTIVE, COMPLETED, CANCELLED
+  notes             String?
+  coverImage        String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  user              User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categories        TripBudgetCategory[]
+  expenses          TripExpense[]
+  transactions      Transaction[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model TripBudgetCategory {
+  id              String   @id @default(cuid())
+  tripId          String
+  category        String   // Transportation, Accommodation, Food, Local transport, Activities, Shopping, Tickets, Permits, Emergency, Miscellaneous
+  estimatedPaise  Int      @default(0)
+  actualPaise     Int      @default(0)
+
+  trip            Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+}
+
+model TripExpense {
+  id          String   @id @default(cuid())
+  tripId      String
+  userId      String
+  category    String
+  amountPaise Int
+  date        DateTime @default(now())
+  description String
+  paidBy      String   @default("Me")
+  receiptUrl  String?
+  createdAt   DateTime @default(now())
+
+  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+  @@index([userId])
+}
+
+model Loan {
+  id             String        @id @default(cuid())
+  userId         String
+  type           String        // LENT (Money I lent), BORROWED (Money I borrowed)
+  person         String
+  principalPaise Int
+  remainingPaise Int
+  interestRate   Float         @default(0)
+  date           DateTime      @default(now())
+  dueDate        DateTime?
+  purpose        String
+  notes          String?
+  status         String        @default("ACTIVE") // ACTIVE, PARTIALLY_PAID, SETTLED, OVERDUE, CANCELLED
+  accountId      String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments       LoanPayment[]
+  transactions   Transaction[]
+  receipts       Receipt[]
+
+  @@index([userId])
+  @@index([type])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model LoanPayment {
+  id                 String   @id @default(cuid())
+  loanId             String
+  userId             String
+  amountPaise        Int
+  principalPartPaise Int
+  interestPartPaise  Int      @default(0)
+  date               DateTime @default(now())
+  accountId          String?
+  notes              String?
+  createdAt          DateTime @default(now())
+
+  loan               Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  receipts           Receipt[]
+
+  @@index([loanId])
+  @@index([userId])
+}
+
+model Bill {
+  id           String    @id @default(cuid())
+  userId       String
+  name         String
+  amountPaise  Int
+  frequency    String    @default("MONTHLY") // WEEKLY, MONTHLY, QUARTERLY, YEARLY, CUSTOM
+  dueDate      DateTime
+  nextDueDate  DateTime
+  category     String    @default("Bills & Utilities")
+  accountId    String?
+  autoRenew    Boolean   @default(true)
+  reminderDays Int       @default(3)
+  status       String    @default("UPCOMING") // UPCOMING, PAID, OVERDUE, CANCELLED
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account      Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // BUDGET_WARNING, BUDGET_EXCEEDED, BILL_DUE, LOAN_DUE, TRIP_REMINDER, AI_INSIGHT, SYSTEM
+  title     String
+  message   String
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+}
+
+model AIInsight {
+  id              String   @id @default(cuid())
+  userId          String
+  type            String   // ANOMALY, BUDGET_RISK, TRIP_PACE, RECURRING_DETECTED, SAVINGS_OPPORTUNITY, CATEGORY_INCREASE, CASHFLOW_PRESSURE
+  title           String
+  explanation     String
+  period          String
+  supportingData  String   // JSON string
+  confidence      Float    @default(0.85)
+  suggestedAction String
+  actionPayload   String?  // JSON string for proposed action
+  isDismissed     Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isDismissed])
+}
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  userId     String
+  action     String
+  entityType String
+  entityId   String?
+  details    String   // JSON
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Receipt {
+  id               String        @id @default(cuid())
+  userId           String
+  loanId           String
+  repaymentId      String?       // null for initial loan receipts
+  receiptNumber    String        @unique
+  verificationId   String        @unique
+  type             String        // LOAN_LENT, LOAN_BORROWED, REPAYMENT, SETTLEMENT
+  amountPaise      Int
+  currency         String        @default("INR")
+  pdfStorageKey    String?       // relative path under uploads/receipts/
+  metadata         String        // JSON: person, purpose, remainingPaise, etc.
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  loan             Loan          @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  repayment        LoanPayment?  @relation(fields: [repaymentId], references: [id], onDelete: SetNull)
+  emailHistory     ReceiptEmail[]
+
+  @@index([userId])
+  @@index([loanId])
+  @@index([receiptNumber])
+  @@index([verificationId])
+  @@index([type])
+}
+
+model ReceiptEmail {
+  id                String   @id @default(cuid())
+  receiptId         String
+  userId            String
+  recipientEmail    String
+  recipientName     String?
+  customMessage     String?
+  status            String   @default("PENDING") // PENDING, SENT, FAILED
+  providerMessageId String?
+  errorMessage      String?
+  sentAt            DateTime?
+  createdAt         DateTime @default(now())
+
+  receipt           Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([receiptId])
+  @@index([userId])
+  @@index([status])
+}
