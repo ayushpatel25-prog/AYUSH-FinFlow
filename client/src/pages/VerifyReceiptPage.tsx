@@ -130,11 +130,13 @@ export const VerifyReceiptPage: React.FC = () => {
                 <span className="font-mono font-bold text-white">{data.receiptNumber}</span>
               </div>
 
-              <div className="flex justify-between py-1.5 border-b border-slate-800/70">
-                <span className="text-slate-400 flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5 text-slate-500" /> Counterparty
+              <div className="flex justify-between items-center py-2 border-b border-slate-800/70">
+                <span className="text-slate-400 flex items-center gap-1.5 font-medium">
+                  <User className="w-4 h-4 text-emerald-400" /> Counterparty Name
                 </span>
-                <span className="font-semibold text-slate-200">{data.person}</span>
+                <span className="font-extrabold text-white text-sm bg-slate-800/90 px-2.5 py-1 rounded-lg border border-slate-700/80 shadow-sm">
+                  {data.person}
+                </span>
               </div>
 
               <div className="flex justify-between py-1.5 border-b border-slate-800/70">

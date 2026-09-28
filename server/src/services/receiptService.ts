@@ -178,107 +178,116 @@ export async function generateAndSavePDF(receiptId: string): Promise<string> {
 
     doc.fillColor('#10b981').fontSize(22).font('Helvetica-Bold')
       .text('FinFlow', 60, 28);
-    doc.fillColor('#94a3b8').fontSize(8).font('Helvetica')
-      .text('Personal Finance Command Center', 60, 55);
+    doc.fillColor('#94a3b8').fontSize(8.5).font('Helvetica')
+      .text('Personal Finance Command Center • Official Digital Receipt', 60, 55);
 
     const label = labelForType(receipt.type, meta.loanType);
     doc.fillColor('#ffffff').fontSize(11).font('Helvetica-Bold')
       .text(label, 60, 28, { align: 'right' });
-    doc.fillColor('#64748b').fontSize(8).font('Helvetica')
+    doc.fillColor('#10b981').fontSize(9).font('Helvetica-Bold')
       .text(receipt.receiptNumber, 60, 44, { align: 'right' });
 
-    // ── Receipt Box ──────────────────────────────────────────────
+    // ── Receipt Amount Box ────────────────────────────────────────
     let y = 110;
+    doc.fillColor('#f8fafc').rect(60, y, W, 75).fill();
+    doc.strokeColor('#cbd5e1').lineWidth(1.5).rect(60, y, W, 75).stroke();
 
-    doc.fillColor('#1e293b').rect(60, y, W, 72).fill();
-    doc.fillColor('#10b981').fontSize(9).font('Helvetica-Bold')
-      .text('AMOUNT', 80, y + 14);
-    doc.fillColor('#ffffff').fontSize(28).font('Helvetica-Bold')
+    doc.fillColor('#64748b').fontSize(8).font('Helvetica-Bold')
+      .text('TOTAL AMOUNT', 80, y + 14);
+    doc.fillColor('#0f172a').fontSize(26).font('Helvetica-Bold')
       .text(formatINR(receipt.amountPaise), 80, y + 28);
-    doc.fillColor('#64748b').fontSize(8).font('Helvetica')
-      .text(`Receipt #: ${receipt.receiptNumber}`, 80, y + 58, { align: 'right' });
+    doc.fillColor('#475569').fontSize(8.5).font('Helvetica')
+      .text(`Receipt #: ${receipt.receiptNumber}`, 80, y + 56, { align: 'right' });
 
-    y += 90;
+    y += 95;
 
-    // ── Two-column details ────────────────────────────────────────
+    // ── Two-column details (Ultra-crisp dark charcoal on white paper) ──
     const colL = 60;
     const colR = 60 + W / 2 + 10;
-    const fieldH = 22;
+    const fieldH = 26;
 
-    function field(label: string, value: string, x: number, fy: number, color = '#f1f5f9') {
-      doc.fillColor('#64748b').fontSize(7.5).font('Helvetica').text(label.toUpperCase(), x, fy);
-      doc.fillColor(color).fontSize(9.5).font('Helvetica-Bold').text(value, x, fy + 10);
+    function field(label: string, value: string, x: number, fy: number, valueColor = '#0f172a') {
+      doc.fillColor('#64748b').fontSize(8).font('Helvetica-Bold').text(label.toUpperCase(), x, fy);
+      doc.fillColor(valueColor).fontSize(11).font('Helvetica-Bold').text(value, x, fy + 11);
     }
 
-    field('Person', meta.person, colL, y);
-    field('Transaction Type', receipt.type.replace(/_/g, ' '), colR, y);
-    y += fieldH;
+    // Person & Transaction Type - high contrast, large bold name
+    field('Person / Counterparty', meta.person || '—', colL, y, '#0f172a');
+    field('Transaction Type', receipt.type.replace(/_/g, ' '), colR, y, '#0f172a');
+    y += fieldH + 4;
 
-    field('Purpose', meta.purpose || '—', colL, y);
-    field('Date', new Date(receipt.createdAt).toLocaleDateString('en-IN', {
+    // Purpose & Date
+    field('Purpose / Reason', meta.purpose || '—', colL, y, '#0f172a');
+    field('Date Issued', new Date(receipt.createdAt).toLocaleDateString('en-IN', {
       day: '2-digit', month: 'short', year: 'numeric'
-    }), colR, y);
-    y += fieldH;
+    }), colR, y, '#0f172a');
+    y += fieldH + 4;
 
-    field('Principal Amount', formatINR(meta.principalPaise), colL, y);
+    // Principal & Due Date
+    field('Principal Amount', formatINR(meta.principalPaise), colL, y, '#0f172a');
     if (meta.dueDate) {
       field('Due Date', new Date(meta.dueDate).toLocaleDateString('en-IN', {
         day: '2-digit', month: 'short', year: 'numeric'
-      }), colR, y);
+      }), colR, y, '#0f172a');
     }
-    y += fieldH;
+    y += fieldH + 4;
 
     if (receipt.type === 'REPAYMENT' || receipt.type === 'SETTLEMENT') {
-      field('Principal Part Repaid', formatINR(meta.principalPartPaise || 0), colL, y);
-      field('Interest Part', formatINR(meta.interestPartPaise || 0), colR, y);
-      y += fieldH;
+      field('Principal Part Repaid', formatINR(meta.principalPartPaise || 0), colL, y, '#0f172a');
+      field('Interest Part', formatINR(meta.interestPartPaise || 0), colR, y, '#0f172a');
+      y += fieldH + 4;
 
-      const remainColor = meta.remainingPaise <= 0 ? '#10b981' : '#f59e0b';
+      const remainColor = meta.remainingPaise <= 0 ? '#059669' : '#d97706';
       field('Remaining Balance', formatINR(meta.remainingPaise), colL, y, remainColor);
-      field('Status', meta.isSettlement ? 'FULLY SETTLED ✓' : 'PARTIALLY PAID', colR, y,
-        meta.isSettlement ? '#10b981' : '#f59e0b');
-      y += fieldH;
+      field('Settlement Status', meta.isSettlement ? 'FULLY SETTLED ✓' : 'PARTIALLY PAID', colR, y,
+        meta.isSettlement ? '#059669' : '#d97706');
+      y += fieldH + 4;
     }
 
     if (meta.interestRate > 0) {
-      field('Interest Rate', `${meta.interestRate}% p.a.`, colL, y);
-      y += fieldH;
+      field('Interest Rate', `${meta.interestRate}% p.a.`, colL, y, '#0f172a');
+      y += fieldH + 4;
     }
 
     if (meta.notes) {
       y += 6;
-      doc.fillColor('#64748b').fontSize(7.5).font('Helvetica').text('NOTES', colL, y);
-      doc.fillColor('#cbd5e1').fontSize(8.5).font('Helvetica').text(meta.notes, colL, y + 10, { width: W });
+      doc.fillColor('#64748b').fontSize(8).font('Helvetica-Bold').text('NOTES', colL, y);
+      doc.fillColor('#334155').fontSize(9.5).font('Helvetica').text(meta.notes, colL, y + 12, { width: W });
       y += 32;
     }
 
     // ── Divider ────────────────────────────────────────────────
     y += 12;
-    doc.strokeColor('#1e293b').lineWidth(1).moveTo(60, y).lineTo(60 + W, y).stroke();
+    doc.strokeColor('#cbd5e1').lineWidth(1).moveTo(60, y).lineTo(60 + W, y).stroke();
     y += 16;
 
-    // ── Verification ───────────────────────────────────────────
-    doc.fillColor('#475569').fontSize(7.5).font('Helvetica')
-      .text('VERIFICATION ID', colL, y);
-    doc.fillColor('#94a3b8').fontSize(9).font('Helvetica-Oblique')
-      .text(receipt.verificationId, colL, y + 10);
+    // ── Verification Card ──────────────────────────────────────
+    doc.fillColor('#f8fafc').rect(60, y, W, 48).fill();
+    doc.strokeColor('#cbd5e1').lineWidth(1).rect(60, y, W, 48).stroke();
 
-    doc.fillColor('#475569').fontSize(7.5).font('Helvetica')
-      .text('VERIFY AT', colR, y);
-    doc.fillColor('#3b82f6').fontSize(8.5).font('Helvetica')
-      .text(`${process.env.CORS_ORIGIN || 'http://localhost:5173'}/verify/${receipt.verificationId}`, colR, y + 10);
+    doc.fillColor('#64748b').fontSize(8).font('Helvetica-Bold')
+      .text('VERIFICATION ID', 75, y + 10);
+    doc.fillColor('#0f172a').fontSize(11).font('Helvetica-Bold')
+      .text(receipt.verificationId, 75, y + 22);
+
+    doc.fillColor('#64748b').fontSize(8).font('Helvetica-Bold')
+      .text('PUBLIC VERIFICATION URL', 75 + W / 2, y + 10);
+    doc.fillColor('#2563eb').fontSize(9).font('Helvetica-Bold')
+      .text(`${process.env.CORS_ORIGIN || 'https://ayush-finflow-app.vercel.app'}/verify/${receipt.verificationId}`, 75 + W / 2, y + 22);
 
     // ── Footer ─────────────────────────────────────────────────
-    y += 50;
-    doc.fillColor('#1e293b').rect(0, 780, 595.28, 61.89).fill();
-    doc.fillColor('#334155').fontSize(7).font('Helvetica')
+    doc.fillColor('#f1f5f9').rect(0, 775, 595.28, 67).fill();
+    doc.strokeColor('#e2e8f0').lineWidth(1).moveTo(0, 775).lineTo(595.28, 775).stroke();
+    doc.fillColor('#475569').fontSize(8).font('Helvetica')
       .text(
-        'This is a computer-generated receipt and does not require a physical signature. ' +
-        'FinFlow Personal Finance — for personal use only.',
-        60, 794, { align: 'center', width: W }
+        'This is an authentic, computer-generated receipt from FinFlow Personal Finance Command Center.',
+        60, 790, { align: 'center', width: W }
       );
-    doc.fillColor('#475569').fontSize(7).font('Helvetica')
-      .text(`Generated: ${new Date().toISOString()}`, 60, 810, { align: 'center', width: W });
+    doc.fillColor('#64748b').fontSize(7.5).font('Helvetica')
+      .text(
+        `Issued At: ${new Date(receipt.createdAt).toLocaleString('en-IN')} • Digital Proof ID: ${receipt.verificationId}`,
+        60, 804, { align: 'center', width: W }
+      );
 
     doc.end();
     stream.on('finish', resolve);
@@ -355,15 +364,6 @@ export async function getReceiptPdfPath(userId: string, receiptId: string): Prom
   });
   if (!receipt) throw new Error('Receipt not found or unauthorized.');
 
-  // If PDF not yet generated, generate it now synchronously
-  if (!receipt.pdfStorageKey) {
-    return generateAndSavePDF(receiptId);
-  }
-
-  const filePath = path.join(UPLOADS_BASE, receipt.pdfStorageKey);
-  if (!fs.existsSync(filePath)) {
-    return generateAndSavePDF(receiptId);
-  }
-
-  return filePath;
+  // Always regenerate with updated high-contrast professional design
+  return generateAndSavePDF(receiptId);
 }
