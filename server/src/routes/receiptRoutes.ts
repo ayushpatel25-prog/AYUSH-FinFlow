@@ -71,7 +71,9 @@ router.get('/:receiptId/pdf', requireAuth, async (req: AuthRequest, res, next) =
     const fileName = path.basename(filePath);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
 
     const fileStream = fs.createReadStream(filePath);
     fileStream.pipe(res);
