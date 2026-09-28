@@ -1,28 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ShieldCheck, AlertCircle, ArrowLeft, CheckCircle2, Calendar, User, FileText } from 'lucide-react';
+import { AlertCircle, ArrowLeft } from 'lucide-react';
 import { api } from '../api/client.js';
-import { formatINR, formatDate } from '../utils/money.js';
-import { Card } from '../components/common/Card.js';
-
-interface VerifiedReceipt {
-  receiptNumber: string;
-  verificationId: string;
-  type: string;
-  amountPaise: number;
-  formattedAmount: string;
-  currency: string;
-  person: string;
-  purpose: string;
-  issuedAt: string;
-  status: string;
-}
+import { FinancialReceipt } from '../components/receipt/FinancialReceipt.js';
+import type { FinancialReceiptData } from '../types/index.js';
 
 export const VerifyReceiptPage: React.FC = () => {
   const { verificationId } = useParams<{ verificationId: string }>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<VerifiedReceipt | null>(null);
+  const [data, setData] = useState<FinancialReceiptData | null>(null);
 
   useEffect(() => {
     if (!verificationId) {
@@ -44,128 +31,54 @@ export const VerifyReceiptPage: React.FC = () => {
   }, [verificationId]);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4 sm:p-6">
-      <div className="w-full max-w-lg space-y-6">
-        {/* Brand header */}
-        <div className="flex items-center justify-between">
+    <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col items-center justify-start p-4 sm:p-6 md:p-8">
+      <div className="w-full max-w-xl space-y-4">
+        {/* Brand Header */}
+        <div className="flex items-center justify-between py-1">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20 font-black text-slate-950 text-base">
+            <div className="w-9 h-9 rounded-xl bg-slate-900 flex items-center justify-center shadow font-black text-emerald-400 text-base">
               F
             </div>
             <div>
-              <span className="font-extrabold text-base tracking-tight text-white block">FinFlow</span>
-              <span className="text-[10px] text-slate-400 block tracking-wider uppercase font-semibold">
-                Receipt Verification System
+              <span className="font-extrabold text-base tracking-tight text-slate-900 block leading-tight">
+                FinFlow
+              </span>
+              <span className="text-[11px] text-slate-500 block tracking-wider uppercase font-bold">
+                Certified Receipt Verification
               </span>
             </div>
           </div>
           <Link
-            to="/auth"
-            className="text-xs text-slate-400 hover:text-white flex items-center gap-1 transition-colors"
+            to="/loans"
+            className="text-xs font-bold text-slate-600 hover:text-slate-950 flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-slate-300 shadow-2xs transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" /> Back to App
           </Link>
         </div>
 
+        {/* Content */}
         {loading ? (
-          <Card className="p-8 text-center border-slate-800 bg-slate-900/90">
-            <div className="w-10 h-10 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-sm font-semibold text-slate-300">Verifying authenticity of digital receipt...</p>
+          <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center shadow-lg">
+            <div className="w-10 h-10 border-3 border-slate-900 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-sm font-bold text-slate-800">Verifying digital receipt authenticity...</p>
             <p className="text-xs text-slate-500 mt-1 font-mono">{verificationId}</p>
-          </Card>
+          </div>
         ) : error || !data ? (
-          <Card className="p-8 text-center border-rose-500/30 bg-slate-900/90">
-            <div className="w-14 h-14 rounded-full bg-rose-500/10 text-rose-400 flex items-center justify-center mx-auto mb-4">
+          <div className="bg-white border border-rose-300 rounded-2xl p-8 text-center shadow-lg">
+            <div className="w-14 h-14 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-4 border border-rose-200">
               <AlertCircle className="w-7 h-7" />
             </div>
-            <h2 className="text-lg font-bold text-white mb-2">Verification Failed</h2>
-            <p className="text-xs text-slate-400 mb-4">{error}</p>
-            <div className="p-3 rounded-lg bg-slate-800/60 text-[11px] text-slate-400 font-mono">
-              Verification ID: {verificationId}
+            <h2 className="text-lg font-black text-slate-900 mb-1">Receipt Verification Failed</h2>
+            <p className="text-xs font-medium text-slate-600 mb-4">{error}</p>
+            <div className="p-3 rounded-lg bg-slate-100 text-xs font-mono text-slate-700 border border-slate-200 max-w-xs mx-auto">
+              ID: {verificationId}
             </div>
-          </Card>
+          </div>
         ) : (
-          <Card className="p-6 sm:p-8 border-emerald-500/30 bg-slate-900/90 shadow-2xl relative overflow-hidden">
-            {/* Top decorative accent */}
-            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-400 to-indigo-500" />
-
-            <div className="flex items-center justify-between pb-5 border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                <span className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
-                  <ShieldCheck className="w-5 h-5" />
-                </span>
-                <div>
-                  <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider block">
-                    Authentic Verified Record
-                  </span>
-                  <span className="text-[11px] text-slate-400">Cryptographically issued by FinFlow</span>
-                </div>
-              </div>
-              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Valid
-              </span>
-            </div>
-
-            {/* Amount Banner */}
-            <div className="my-6 p-4 rounded-xl bg-slate-800/60 border border-slate-700/60 flex items-center justify-between">
-              <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                  Transaction Amount
-                </span>
-                <span className="text-2xl sm:text-3xl font-black text-white block mt-0.5">
-                  {formatINR(data.amountPaise)}
-                </span>
-              </div>
-              <span className="px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wide bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                {data.type.replace(/_/g, ' ')}
-              </span>
-            </div>
-
-            {/* Receipt Details */}
-            <div className="space-y-3.5 text-xs">
-              <div className="flex justify-between py-1.5 border-b border-slate-800/70">
-                <span className="text-slate-400 flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-slate-500" /> Receipt Number
-                </span>
-                <span className="font-mono font-bold text-white">{data.receiptNumber}</span>
-              </div>
-
-              <div className="flex justify-between items-center py-2 border-b border-slate-800/70">
-                <span className="text-slate-400 flex items-center gap-1.5 font-medium">
-                  <User className="w-4 h-4 text-emerald-400" /> Counterparty Name
-                </span>
-                <span className="font-extrabold text-white text-sm bg-slate-800/90 px-2.5 py-1 rounded-lg border border-slate-700/80 shadow-sm">
-                  {data.person}
-                </span>
-              </div>
-
-              <div className="flex justify-between py-1.5 border-b border-slate-800/70">
-                <span className="text-slate-400 flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-slate-500" /> Purpose
-                </span>
-                <span className="font-semibold text-slate-200">{data.purpose || 'Peer Transaction'}</span>
-              </div>
-
-              <div className="flex justify-between py-1.5 border-b border-slate-800/70">
-                <span className="text-slate-400 flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-slate-500" /> Issue Timestamp
-                </span>
-                <span className="text-slate-300">{formatDate(data.issuedAt)}</span>
-              </div>
-
-              <div className="flex justify-between py-1.5">
-                <span className="text-slate-400">Verification ID</span>
-                <span className="font-mono text-emerald-400 font-bold">{data.verificationId}</span>
-              </div>
-            </div>
-
-            {/* Disclaimer */}
-            <div className="mt-6 pt-4 border-t border-slate-800 text-center">
-              <p className="text-[10px] text-slate-500">
-                This verification proves this receipt was generated directly within the FinFlow Personal Finance platform.
-              </p>
-            </div>
-          </Card>
+          <FinancialReceipt
+            receipt={data}
+            showActions={false}
+          />
         )}
       </div>
     </div>

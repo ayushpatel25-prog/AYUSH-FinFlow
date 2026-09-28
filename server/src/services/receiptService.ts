@@ -335,7 +335,7 @@ export async function getLoanReceipts(userId: string, loanId: string) {
   });
 }
 
-// ─── Verify receipt (public endpoint — returns minimal safe info) ─────────────
+// ─── Verify receipt (public endpoint — returns safe financial details) ─────────
 export async function verifyReceipt(verificationId: string) {
   const receipt = await prisma.receipt.findFirst({
     where: { verificationId },
@@ -351,18 +351,50 @@ export async function verifyReceipt(verificationId: string) {
   });
   if (!receipt) return null;
 
-  const meta = JSON.parse(receipt.metadata);
+  let meta: any = {};
+  try {
+    meta = JSON.parse(receipt.metadata || '{}');
+  } catch {
+    meta = {};
+  }
+
+  const isSettlement = !!meta.isSettlement;
+  const status = isSettlement
+    ? 'FULLY SETTLED'
+    : receipt.type === 'REPAYMENT'
+    ? 'PARTIALLY PAID'
+    : meta.remainingPaise !== undefined && meta.remainingPaise <= 0
+    ? 'SETTLED'
+    : 'ACTIVE';
+
+  const principal = meta.principalPaise ?? receipt.amountPaise;
+  const remaining = meta.remainingPaise ?? 0;
+  const principalPaid = meta.principalPartPaise ?? (
+    receipt.type === 'LOAN_LENT' || receipt.type === 'LOAN_BORROWED'
+      ? receipt.amountPaise
+      : Math.max(0, principal - remaining)
+  );
+
   return {
     receiptNumber: receipt.receiptNumber,
     verificationId: receipt.verificationId,
     type: receipt.type,
     amountPaise: receipt.amountPaise,
     formattedAmount: formatINR(receipt.amountPaise),
-    currency: receipt.currency,
-    person: meta.person,
-    purpose: meta.purpose,
+    currency: receipt.currency || 'INR',
+    person: meta.person || 'N/A',
+    purpose: meta.purpose || 'Peer Transaction',
+    principalPaise: principal,
+    principalPaidPaise: principalPaid,
+    remainingPaise: remaining,
+    interestPaise: meta.interestPartPaise ?? 0,
+    interestRate: meta.interestRate ?? 0,
+    dueDate: meta.dueDate || null,
+    notes: meta.notes || null,
+    date: meta.paymentDate || meta.loanDate || receipt.createdAt,
     issuedAt: receipt.createdAt,
-    status: 'VALID',
+    status,
+    isVerified: true,
   };
 }
 

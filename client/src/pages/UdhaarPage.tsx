@@ -18,6 +18,7 @@ import {
   Clock,
   X,
   Check,
+  Eye,
 } from 'lucide-react';
 import { api } from '../api/client.js';
 import { formatINR, formatDate, rupeesToPaise } from '../utils/money.js';
@@ -28,7 +29,8 @@ import { Input } from '../components/common/Input.js';
 import { CurrencyInput } from '../components/common/CurrencyInput.js';
 import { Select } from '../components/common/Select.js';
 import { LoadingSkeleton } from '../components/common/LoadingSkeleton.js';
-import type { Loan, Receipt, ReceiptEmail } from '../types/index.js';
+import { FinancialReceipt } from '../components/receipt/FinancialReceipt.js';
+import type { Loan, Receipt, ReceiptEmail, FinancialReceiptData } from '../types/index.js';
 
 export const UdhaarPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -70,6 +72,56 @@ export const UdhaarPage: React.FC = () => {
 
   // Downloading PDF tracking
   const [downloadingReceiptId, setDownloadingReceiptId] = useState<string | null>(null);
+
+  // Redesigned Financial Receipt View Modal state
+  const [selectedReceiptForView, setSelectedReceiptForView] = useState<{
+    receipt: Receipt;
+    loan?: Loan | null;
+  } | null>(null);
+
+  const getReceiptData = (receipt: Receipt, loan?: Loan | null): FinancialReceiptData => {
+    let meta: any = {};
+    try {
+      meta = JSON.parse(receipt.metadata || '{}');
+    } catch {
+      meta = {};
+    }
+    const isSettlement = !!meta.isSettlement || (loan ? loan.remainingPaise <= 0 : false);
+    const status = isSettlement
+      ? 'FULLY SETTLED'
+      : receipt.type === 'REPAYMENT'
+      ? 'PARTIALLY PAID'
+      : (loan?.remainingPaise !== undefined && loan.remainingPaise <= 0 ? 'SETTLED' : 'ACTIVE');
+
+    const principal = meta.principalPaise ?? loan?.principalPaise ?? receipt.amountPaise;
+    const remaining = meta.remainingPaise ?? loan?.remainingPaise ?? 0;
+    const principalPaid = meta.principalPartPaise ?? (
+      receipt.type === 'LOAN_LENT' || receipt.type === 'LOAN_BORROWED'
+        ? receipt.amountPaise
+        : Math.max(0, principal - remaining)
+    );
+
+    return {
+      receiptNumber: receipt.receiptNumber,
+      verificationId: receipt.verificationId,
+      type: receipt.type,
+      amountPaise: receipt.amountPaise,
+      currency: receipt.currency || 'INR',
+      person: meta.person || loan?.person || 'N/A',
+      purpose: meta.purpose || loan?.purpose || 'Peer Transaction',
+      principalPaise: principal,
+      principalPaidPaise: principalPaid,
+      remainingPaise: remaining,
+      interestPaise: meta.interestPartPaise ?? 0,
+      interestRate: meta.interestRate ?? loan?.interestRate ?? 0,
+      dueDate: meta.dueDate || loan?.dueDate || null,
+      status,
+      notes: meta.notes || loan?.notes || null,
+      date: meta.paymentDate || meta.loanDate || receipt.createdAt,
+      issuedAt: receipt.createdAt,
+      isVerified: true,
+    };
+  };
 
   // New Loan Form
   const [person, setPerson] = useState('');
@@ -706,13 +758,28 @@ export const UdhaarPage: React.FC = () => {
             {postActionData?.receipt && (
               <>
                 <Button
-                  onClick={() => handleDownloadPdf(postActionData.receipt!)}
+                  onClick={() => {
+                    const r = postActionData.receipt!;
+                    const allLoans = [...(summary?.lentList || []), ...(summary?.borrowedList || [])];
+                    const l = activeLoanForReceipts || allLoans.find((x: Loan) => x.id === postActionData.loanId);
+                    setSelectedReceiptForView({ receipt: r, loan: l });
+                    setPostActionData(null);
+                  }}
                   variant="primary"
                   className="w-full sm:w-auto flex-1 text-xs"
-                  isLoading={downloadingReceiptId === postActionData.receipt.id}
-                  leftIcon={<Download className="w-3.5 h-3.5" />}
+                  leftIcon={<Eye className="w-3.5 h-3.5 text-emerald-300" />}
                 >
-                  Download Receipt PDF
+                  View Full Receipt
+                </Button>
+
+                <Button
+                  onClick={() => handleDownloadPdf(postActionData.receipt!)}
+                  variant="secondary"
+                  className="w-full sm:w-auto flex-1 text-xs"
+                  isLoading={downloadingReceiptId === postActionData.receipt.id}
+                  leftIcon={<Download className="w-3.5 h-3.5 text-emerald-400" />}
+                >
+                  Download PDF
                 </Button>
 
                 <Button
@@ -725,7 +792,7 @@ export const UdhaarPage: React.FC = () => {
                   className="w-full sm:w-auto flex-1 text-xs"
                   leftIcon={<Send className="w-3.5 h-3.5 text-indigo-400" />}
                 >
-                  Email Receipt
+                  Email
                 </Button>
               </>
             )}
@@ -819,6 +886,17 @@ export const UdhaarPage: React.FC = () => {
                     {/* Action buttons on receipt item */}
                     <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-700/50">
                       <div className="flex items-center gap-2">
+                        {/* View Receipt button */}
+                        <Button
+                          onClick={() => setSelectedReceiptForView({ receipt, loan: activeLoanForReceipts })}
+                          variant="primary"
+                          size="sm"
+                          className="text-xs"
+                          leftIcon={<Eye className="w-3.5 h-3.5 text-emerald-300" />}
+                        >
+                          View
+                        </Button>
+
                         {/* Download PDF button */}
                         <Button
                           onClick={() => handleDownloadPdf(receipt)}
@@ -1019,6 +1097,31 @@ export const UdhaarPage: React.FC = () => {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* ── REDESIGNED FULL FINANCIAL RECEIPT MODAL ───────────────────────── */}
+      <Modal
+        isOpen={!!selectedReceiptForView}
+        onClose={() => setSelectedReceiptForView(null)}
+        title="Transaction Receipt Details"
+        maxWidth="lg"
+      >
+        {selectedReceiptForView && (
+          <div className="py-2">
+            <FinancialReceipt
+              receipt={getReceiptData(selectedReceiptForView.receipt, selectedReceiptForView.loan)}
+              onDownloadPdf={() => handleDownloadPdf(selectedReceiptForView.receipt)}
+              onSendEmail={() => {
+                const r = selectedReceiptForView.receipt;
+                const p = selectedReceiptForView.loan?.person;
+                setSelectedReceiptForView(null);
+                handleOpenSendEmail(r, p);
+              }}
+              isDownloadingPdf={downloadingReceiptId === selectedReceiptForView.receipt.id}
+              showActions={true}
+            />
+          </div>
+        )}
       </Modal>
     </div>
   );

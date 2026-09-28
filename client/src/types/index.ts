@@ -251,6 +251,28 @@ export interface Receipt {
   emailHistory?: ReceiptEmail[];
 }
 
+export interface FinancialReceiptData {
+  receiptNumber: string;
+  verificationId: string;
+  type: string;
+  amountPaise: number;
+  formattedAmount?: string;
+  currency?: string;
+  person: string;
+  purpose?: string;
+  principalPaise?: number;
+  principalPaidPaise?: number;
+  remainingPaise?: number;
+  interestPaise?: number;
+  interestRate?: number;
+  dueDate?: string | null;
+  status?: string;
+  notes?: string | null;
+  date?: string;
+  issuedAt?: string;
+  isVerified?: boolean;
+}
+
 
 export interface Bill {
   id: string;
