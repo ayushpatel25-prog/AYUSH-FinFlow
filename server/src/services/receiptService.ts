@@ -165,9 +165,22 @@ function formatPdfCurrency(paise: number): string {
   return `Rs. ${rupees}`;
 }
 
+function sanitizePdfText(str: string): string {
+  if (!str) return '';
+  return String(str)
+    .replace(/[₹]/g, 'Rs. ')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/[\u2022]/g, '*');
+}
+
 // ─── PDF Generation ───────────────────────────────────────────────────────────
 export async function generateAndSavePDF(receiptId: string): Promise<string> {
-  const receipt = await prisma.receipt.findUnique({ where: { id: receiptId } });
+  const receipt = await prisma.receipt.findUnique({
+    where: { id: receiptId },
+    include: { loan: true },
+  });
   if (!receipt) throw new Error('Receipt not found.');
 
   let meta: any = {};
@@ -180,9 +193,13 @@ export async function generateAndSavePDF(receiptId: string): Promise<string> {
   const filePath = path.join(RECEIPTS_DIR, `${receiptId}.pdf`);
   const pdfStorageKey = `receipts/${receiptId}.pdf`;
 
+  const loan = receipt.loan;
+  const personName = sanitizePdfText(meta.person || loan?.person || 'N/A');
+  const purposeText = sanitizePdfText(meta.purpose || loan?.purpose || 'Peer Transaction');
+
   // Determine financial values
-  const principalPaise = meta.principalPaise ?? receipt.amountPaise;
-  const remainingPaise = meta.remainingPaise ?? 0;
+  const principalPaise = meta.principalPaise ?? loan?.principalPaise ?? receipt.amountPaise;
+  const remainingPaise = meta.remainingPaise ?? loan?.remainingPaise ?? 0;
   const principalPaidPaise = meta.principalPartPaise ?? (
     receipt.type === 'LOAN_LENT' || receipt.type === 'LOAN_BORROWED'
       ? receipt.amountPaise
@@ -192,7 +209,7 @@ export async function generateAndSavePDF(receiptId: string): Promise<string> {
   const interestPaise = meta.interestPartPaise ?? 0;
   const interestText = interestPaise > 0
     ? formatPdfCurrency(interestPaise)
-    : (meta.interestRate ? `${meta.interestRate}% p.a.` : 'Rs. 0.00');
+    : (meta.interestRate || loan?.interestRate ? `${meta.interestRate || loan?.interestRate}% p.a.` : 'Rs. 0.00');
 
   const isSettled = !!meta.isSettlement || remainingPaise <= 0;
   const statusText = isSettled
@@ -205,13 +222,16 @@ export async function generateAndSavePDF(receiptId: string): Promise<string> {
   const statusBorder = isSettled ? '#34d399' : receipt.type === 'REPAYMENT' ? '#fbbf24' : '#818cf8';
   const statusColor = isSettled ? '#065f46' : receipt.type === 'REPAYMENT' ? '#78350f' : '#1e1b4b';
 
-  const dateStr = new Date(meta.paymentDate || meta.loanDate || receipt.createdAt).toLocaleDateString('en-IN', {
+  const dateStr = new Date(meta.paymentDate || meta.loanDate || loan?.date || receipt.createdAt).toLocaleDateString('en-IN', {
     day: '2-digit', month: 'short', year: 'numeric'
   });
 
-  const dueDateStr = meta.dueDate
-    ? new Date(meta.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+  const rawDueDate = meta.dueDate || loan?.dueDate;
+  const dueDateStr = rawDueDate
+    ? new Date(rawDueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
     : 'N/A';
+
+  const notesText = sanitizePdfText(meta.notes || loan?.notes || 'N/A');
 
   const verifyHost = process.env.CORS_ORIGIN && process.env.CORS_ORIGIN !== '*'
     ? process.env.CORS_ORIGIN.split(',')[0].trim()
@@ -231,6 +251,10 @@ export async function generateAndSavePDF(receiptId: string): Promise<string> {
 
     const marginX = 45;
     const contentW = 505.28;
+    const colW = (contentW / 2) - 15;
+
+    // ── 0. Solid Opaque White Background (Prevents transparency issues in mobile/dark viewers)
+    doc.rect(0, 0, 595.28, 841.89).fill('#ffffff');
 
     // ── 1. Header Bar ──────────────────────────────────────────────
     doc.rect(0, 0, 595.28, 80).fill('#0f172a');
@@ -266,17 +290,23 @@ export async function generateAndSavePDF(receiptId: string): Promise<string> {
     const rowGap = 44;
 
     function renderCell(label: string, value: string, x: number, cy: number, valColor = '#000000', valSize = 13) {
-      doc.fillColor('#475569').fontSize(8.5).font('Helvetica-Bold').text(label.toUpperCase(), x, cy);
-      doc.fillColor(valColor).fontSize(valSize).font('Helvetica-Bold').text(value, x, cy + 12);
+      doc.save();
+      doc.fillOpacity(1.0).strokeOpacity(1.0);
+      doc.fillColor('#475569').fontSize(8.5).font('Helvetica-Bold');
+      doc.text(label.toUpperCase(), x, cy, { width: colW, lineBreak: false, ellipsis: true });
+
+      doc.fillColor(valColor || '#000000').fontSize(valSize).font('Helvetica-Bold');
+      doc.text(String(value || 'N/A'), x, cy + 13, { width: colW, lineBreak: false, ellipsis: true });
+      doc.restore();
     }
 
     // Row 1: PERSON & TRANSACTION TYPE
-    renderCell('PERSON', meta.person || 'N/A', col1X, y, '#000000', 15);
+    renderCell('PERSON', personName, col1X, y, '#000000', 14);
     renderCell('TRANSACTION TYPE', receipt.type.replace(/_/g, ' '), col2X, y, '#000000', 13);
 
     // Row 2: PURPOSE & DATE
     y += rowGap;
-    renderCell('PURPOSE', meta.purpose || 'Peer Transaction', col1X, y, '#000000', 12);
+    renderCell('PURPOSE', purposeText, col1X, y, '#000000', 12);
     renderCell('DATE', dateStr, col2X, y, '#000000', 12);
 
     // Row 3: PRINCIPAL AMOUNT & INTEREST
@@ -289,11 +319,14 @@ export async function generateAndSavePDF(receiptId: string): Promise<string> {
     renderCell('PRINCIPAL PAID', formatPdfCurrency(principalPaidPaise), col1X, y, '#000000', 13);
 
     // Status Badge
+    doc.save();
+    doc.fillOpacity(1.0).strokeOpacity(1.0);
     doc.fillColor('#475569').fontSize(8.5).font('Helvetica-Bold').text('STATUS', col2X, y);
     doc.roundedRect(col2X, y + 12, 125, 20, 4).fill(statusBg);
     doc.strokeColor(statusBorder).lineWidth(1).roundedRect(col2X, y + 12, 125, 20, 4).stroke();
     doc.fillColor(statusColor).fontSize(9.5).font('Helvetica-Bold')
       .text(statusText, col2X, y + 16, { width: 125, align: 'center' });
+    doc.restore();
 
     // Row 5: REMAINING BALANCE & DUE DATE
     y += rowGap;
@@ -303,11 +336,14 @@ export async function generateAndSavePDF(receiptId: string): Promise<string> {
 
     // ── 5. NOTES (Dedicated container below grid) ──────────────────
     y += rowGap + 6;
+    doc.save();
+    doc.fillOpacity(1.0).strokeOpacity(1.0);
     doc.fillColor('#475569').fontSize(8.5).font('Helvetica-Bold').text('NOTES', marginX, y);
     doc.roundedRect(marginX, y + 12, contentW, 40, 6).fill('#f8fafc');
     doc.strokeColor('#cbd5e1').lineWidth(1).roundedRect(marginX, y + 12, contentW, 40, 6).stroke();
     doc.fillColor('#000000').fontSize(10.5).font('Helvetica-Bold')
-      .text(meta.notes || 'N/A', marginX + 12, y + 24, { width: contentW - 24 });
+      .text(notesText, marginX + 12, y + 24, { width: contentW - 24 });
+    doc.restore();
 
     // ── 6. VERIFICATION SECTION ────────────────────────────────────
     y += 66;
@@ -317,11 +353,14 @@ export async function generateAndSavePDF(receiptId: string): Promise<string> {
     doc.roundedRect(marginX, y, contentW, 52, 6).fill('#f1f5f9');
     doc.strokeColor('#cbd5e1').lineWidth(1).roundedRect(marginX, y, contentW, 52, 6).stroke();
 
+    doc.save();
+    doc.fillOpacity(1.0).strokeOpacity(1.0);
     doc.fillColor('#475569').fontSize(8.5).font('Helvetica-Bold').text('VERIFICATION ID', marginX + 15, y + 10);
     doc.fillColor('#000000').fontSize(13).font('Courier-Bold').text(receipt.verificationId, marginX + 15, y + 24);
 
     doc.fillColor('#475569').fontSize(8.5).font('Helvetica-Bold').text('VERIFY AT', col2X, y + 10);
     doc.fillColor('#1d4ed8').fontSize(9.5).font('Helvetica-Bold').text(verifyUrl, col2X, y + 25);
+    doc.restore();
 
     // ── 7. FOOTER ──────────────────────────────────────────────────
     y = 745;

@@ -135,7 +135,10 @@ export const FinancialReceipt: React.FC<FinancialReceiptProps> = ({
               <span className="text-[11px] sm:text-xs font-black text-slate-500 uppercase tracking-wider block">
                 PERSON
               </span>
-              <p className="text-[17px] sm:text-[18px] font-black text-slate-950 mt-1 leading-snug break-words">
+              <p
+                style={{ color: '#020617', opacity: 1 }}
+                className="text-[17px] sm:text-[18px] font-black text-slate-950 mt-1 leading-snug break-words"
+              >
                 {personName}
               </p>
             </div>
@@ -145,7 +148,10 @@ export const FinancialReceipt: React.FC<FinancialReceiptProps> = ({
               <span className="text-[11px] sm:text-xs font-black text-slate-500 uppercase tracking-wider block">
                 PURPOSE
               </span>
-              <p className="text-[15px] sm:text-[16px] font-bold text-slate-900 mt-1 leading-snug break-words">
+              <p
+                style={{ color: '#0f172a', opacity: 1 }}
+                className="text-[15px] sm:text-[16px] font-bold text-slate-900 mt-1 leading-snug break-words"
+              >
                 {purpose}
               </p>
             </div>
@@ -155,7 +161,10 @@ export const FinancialReceipt: React.FC<FinancialReceiptProps> = ({
               <span className="text-[11px] sm:text-xs font-black text-slate-500 uppercase tracking-wider block">
                 PRINCIPAL AMOUNT
               </span>
-              <p className="text-[15px] sm:text-[16px] font-black text-slate-950 mt-1">
+              <p
+                style={{ color: '#020617', opacity: 1 }}
+                className="text-[15px] sm:text-[16px] font-black text-slate-950 mt-1"
+              >
                 {principalAmountText}
               </p>
             </div>
@@ -165,7 +174,10 @@ export const FinancialReceipt: React.FC<FinancialReceiptProps> = ({
               <span className="text-[11px] sm:text-xs font-black text-slate-500 uppercase tracking-wider block">
                 PRINCIPAL PAID
               </span>
-              <p className="text-[15px] sm:text-[16px] font-black text-slate-950 mt-1">
+              <p
+                style={{ color: '#020617', opacity: 1 }}
+                className="text-[15px] sm:text-[16px] font-black text-slate-950 mt-1"
+              >
                 {principalPaidText}
               </p>
             </div>
@@ -175,7 +187,10 @@ export const FinancialReceipt: React.FC<FinancialReceiptProps> = ({
               <span className="text-[11px] sm:text-xs font-black text-slate-500 uppercase tracking-wider block">
                 REMAINING BALANCE
               </span>
-              <p className={`text-[15px] sm:text-[16px] font-black mt-1 ${isSettled ? 'text-emerald-700' : 'text-slate-950'}`}>
+              <p
+                style={{ color: isSettled ? '#047857' : '#020617', opacity: 1 }}
+                className={`text-[15px] sm:text-[16px] font-black mt-1 ${isSettled ? 'text-emerald-700' : 'text-slate-950'}`}
+              >
                 {remainingBalanceText}
               </p>
             </div>
@@ -188,7 +203,10 @@ export const FinancialReceipt: React.FC<FinancialReceiptProps> = ({
               <span className="text-[11px] sm:text-xs font-black text-slate-500 uppercase tracking-wider block">
                 TRANSACTION TYPE
               </span>
-              <p className="text-[15px] sm:text-[16px] font-black text-slate-950 mt-1 uppercase">
+              <p
+                style={{ color: '#020617', opacity: 1 }}
+                className="text-[15px] sm:text-[16px] font-black text-slate-950 mt-1 uppercase"
+              >
                 {transactionType}
               </p>
             </div>
@@ -198,7 +216,10 @@ export const FinancialReceipt: React.FC<FinancialReceiptProps> = ({
               <span className="text-[11px] sm:text-xs font-black text-slate-500 uppercase tracking-wider block">
                 DATE
               </span>
-              <p className="text-[15px] sm:text-[16px] font-bold text-slate-900 mt-1">
+              <p
+                style={{ color: '#0f172a', opacity: 1 }}
+                className="text-[15px] sm:text-[16px] font-bold text-slate-900 mt-1"
+              >
                 {dateFormatted}
               </p>
             </div>
@@ -208,7 +229,10 @@ export const FinancialReceipt: React.FC<FinancialReceiptProps> = ({
               <span className="text-[11px] sm:text-xs font-black text-slate-500 uppercase tracking-wider block">
                 INTEREST
               </span>
-              <p className="text-[15px] sm:text-[16px] font-black text-slate-950 mt-1">
+              <p
+                style={{ color: '#020617', opacity: 1 }}
+                className="text-[15px] sm:text-[16px] font-black text-slate-950 mt-1"
+              >
                 {interestText}
               </p>
             </div>
@@ -219,7 +243,10 @@ export const FinancialReceipt: React.FC<FinancialReceiptProps> = ({
                 STATUS
               </span>
               <div className="mt-1">
-                <span className={`inline-block px-3 py-1 rounded-md text-xs border uppercase tracking-wider ${statusBadgeClass}`}>
+                <span
+                  style={{ opacity: 1 }}
+                  className={`inline-block px-3 py-1 rounded-md text-xs border uppercase tracking-wider ${statusBadgeClass}`}
+                >
                   {statusRaw}
                 </span>
               </div>
@@ -233,7 +260,10 @@ export const FinancialReceipt: React.FC<FinancialReceiptProps> = ({
             NOTES
           </span>
           <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200">
-            <p className="text-[14px] sm:text-[15px] font-bold text-slate-900 leading-relaxed whitespace-pre-wrap break-words">
+            <p
+              style={{ color: '#0f172a', opacity: 1 }}
+              className="text-[14px] sm:text-[15px] font-bold text-slate-900 leading-relaxed whitespace-pre-wrap break-words"
+            >
               {receipt.notes || 'N/A'}
             </p>
           </div>
@@ -271,7 +301,10 @@ export const FinancialReceipt: React.FC<FinancialReceiptProps> = ({
               <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider block">
                 VERIFICATION ID
               </span>
-              <p className="font-mono text-sm sm:text-base font-black text-slate-950 tracking-wide mt-0.5 select-all">
+              <p
+                style={{ color: '#020617', opacity: 1 }}
+                className="font-mono text-sm sm:text-base font-black text-slate-950 tracking-wide mt-0.5 select-all"
+              >
                 {receipt.verificationId || 'N/A'}
               </p>
             </div>
