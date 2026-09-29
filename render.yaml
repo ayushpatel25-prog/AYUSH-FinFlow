@@ -20,7 +20,7 @@ services:
       # e.g.: postgresql://postgres:password@ep-cool-fog-12345.neon.tech/finflow?sslmode=require
       # If left as file:./data/finflow.db, FinFlow will use local SQLite.
       - key: DATABASE_URL
-        value: file:./data/finflow.db
+        value: postgresql://neondb_owner:npg_dKNBhjz4Me0m@ep-billowing-tree-b45dtxzq-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
       # Persistent JWT secret so user sessions survive redeployments and restarts
       - key: JWT_SECRET
         value: finflow_production_jwt_secret_token_secure_permanent_key_2026

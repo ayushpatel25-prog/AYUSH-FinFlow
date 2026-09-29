@@ -4,7 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import { registerUser, loginUser } from '../src/services/authService.js';
 import bcrypt from 'bcryptjs';
 
-describe('Comprehensive Authentication & Data Persistence Suite (Tests 1-6)', () => {
+describe('Comprehensive Authentication & Data Persistence Suite (Tests 1-6)', { timeout: 20000 }, () => {
   const timestamp = Date.now();
   const rawEmail = `Permanent.User.${timestamp}@FinFlow.IO`;
   const normalizedEmail = `permanent.user.${timestamp}@finflow.io`;
