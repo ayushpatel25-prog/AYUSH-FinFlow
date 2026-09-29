@@ -30,7 +30,9 @@ export async function registerUser(data: {
     where: { email: normalizedEmail },
   });
   if (existing) {
-    throw new Error('An account with this email address already exists. Please sign in instead.');
+    const error = new Error('An account with this email address already exists. Please sign in instead.');
+    (error as any).statusCode = 409;
+    throw error;
   }
 
   const passwordHash = await bcrypt.hash(data.password, 10);
@@ -131,12 +133,16 @@ export async function loginUser(data: { email: string; password: string }) {
   });
 
   if (!user) {
-    throw new Error('Invalid email or password.');
+    const error = new Error('Invalid email or password.');
+    (error as any).statusCode = 401;
+    throw error;
   }
 
   const isValid = await bcrypt.compare(data.password, user.passwordHash);
   if (!isValid) {
-    throw new Error('Invalid email or password.');
+    const error = new Error('Invalid email or password.');
+    (error as any).statusCode = 401;
+    throw error;
   }
 
   const token = generateToken({ id: user.id, email: user.email });
