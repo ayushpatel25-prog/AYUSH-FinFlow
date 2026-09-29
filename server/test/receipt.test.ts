@@ -1,5 +1,30 @@
 import { describe, it, expect } from 'vitest';
 import { rupeesToPaise, paiseToRupees, formatINR } from '../src/utils/money.js';
+import zlib from 'zlib';
+
+function extractTextFromPdf(buffer: Buffer): string {
+  const str = buffer.toString('binary');
+  const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  let match: RegExpExecArray | null;
+  let text = '';
+  while ((match = streamRegex.exec(str)) !== null) {
+    try {
+      const decompressed = zlib.inflateSync(Buffer.from(match[1], 'binary')).toString('utf8');
+      const tjRegex = /\[(.*?)\]\s*TJ/g;
+      let tjMatch: RegExpExecArray | null;
+      while ((tjMatch = tjRegex.exec(decompressed)) !== null) {
+        const hexRegex = /<([0-9a-fA-F]+)>/g;
+        let hexMatch: RegExpExecArray | null;
+        let line = '';
+        while ((hexMatch = hexRegex.exec(tjMatch[1])) !== null) {
+          line += Buffer.from(hexMatch[1], 'hex').toString('utf8');
+        }
+        text += ' ' + line;
+      }
+    } catch (e) {}
+  }
+  return text;
+}
 
 describe('Receipt Numbering and Prefix Invariants', () => {
   it('formats loan lent and loan borrowed receipts with LN prefix', () => {
@@ -118,4 +143,91 @@ describe('Receipt Public Verification Security Boundary', () => {
     expect(publicData.status).toBe('VALID');
     expect(publicData.receiptNumber).toBe('LN-2026-000001');
   });
+
+  it('generates a LEND receipt with visible dynamic values and LEND transaction type', async () => {
+    const { generateAndSavePDF } = await import('../src/services/receiptService.js');
+    const prisma = (await import('../src/prisma.js')).default;
+    const fs = await import('fs');
+
+    let user = await prisma.user.findFirst();
+    if (!user) {
+      user = await prisma.user.create({
+        data: { email: 'lend_test@finflow.io', passwordHash: 'dummy', name: 'Lend Tester' },
+      });
+    }
+
+    const loan = await prisma.loan.create({
+      data: {
+        userId: user.id,
+        person: 'Akshat Singh',
+        type: 'LENT',
+        principalPaise: 500000,
+        remainingPaise: 500000,
+        purpose: 'Trip / Personal',
+        dueDate: new Date('2026-10-15'),
+        date: new Date('2026-09-29'),
+      },
+    });
+
+    const { createLoanReceipt } = await import('../src/services/receiptService.js');
+    const receipt = await createLoanReceipt(user.id, loan.id);
+    const pdfPath = await generateAndSavePDF(receipt.id);
+
+    expect(fs.existsSync(pdfPath)).toBe(true);
+    const pdfBuffer = fs.readFileSync(pdfPath);
+    expect(pdfBuffer.length).toBeGreaterThan(1000);
+
+    const pdfText = extractTextFromPdf(pdfBuffer);
+    expect(pdfText).toContain('Akshat Singh');
+    expect(pdfText).toContain('Trip / Personal');
+    expect(pdfText).toContain('LEND');
+    expect(pdfText).toContain('5,000');
+
+    // Clean up
+    await prisma.receipt.deleteMany({ where: { id: receipt.id } });
+    await prisma.loan.deleteMany({ where: { id: loan.id } });
+  }, 20000);
+
+  it('generates a BORROW receipt with visible dynamic values and BORROW transaction type', async () => {
+    const { generateAndSavePDF, createLoanReceipt } = await import('../src/services/receiptService.js');
+    const prisma = (await import('../src/prisma.js')).default;
+    const fs = await import('fs');
+
+    let user = await prisma.user.findFirst();
+    if (!user) {
+      user = await prisma.user.create({
+        data: { email: 'borrow_test@finflow.io', passwordHash: 'dummy', name: 'Borrow Tester' },
+      });
+    }
+
+    // Test with long person name and different amount
+    const loan = await prisma.loan.create({
+      data: {
+        userId: user.id,
+        person: 'Chandrashekhar Venkataraman',
+        type: 'BORROWED',
+        principalPaise: 15000000, // ₹1,50,000
+        remainingPaise: 15000000,
+        purpose: 'Medical Emergency Assistance',
+        dueDate: new Date('2027-01-01'),
+        date: new Date('2026-09-29'),
+      },
+    });
+
+    const receipt = await createLoanReceipt(user.id, loan.id);
+    const pdfPath = await generateAndSavePDF(receipt.id);
+
+    expect(fs.existsSync(pdfPath)).toBe(true);
+    const pdfBuffer = fs.readFileSync(pdfPath);
+
+    const pdfText = extractTextFromPdf(pdfBuffer);
+    expect(pdfText).toContain('Chandrashekhar Venkataraman');
+    expect(pdfText).toContain('Medical Emergency Assistance');
+    expect(pdfText).toContain('BORROW');
+    expect(pdfText).toContain('1,50,000');
+
+    // Clean up
+    await prisma.receipt.deleteMany({ where: { id: receipt.id } });
+    await prisma.loan.deleteMany({ where: { id: loan.id } });
+  }, 20000);
 });

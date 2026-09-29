@@ -62,7 +62,7 @@ export const FinancialReceipt: React.FC<FinancialReceiptProps> = ({
   // Safe field values
   const personName = receipt.person || 'N/A';
   const purpose = receipt.purpose || 'Peer Transaction';
-  const transactionType = receipt.type ? receipt.type.replace(/_/g, ' ') : 'TRANSACTION';
+  const transactionType = receipt.type === 'LOAN_LENT' ? 'LEND' : receipt.type === 'LOAN_BORROWED' ? 'BORROW' : (receipt.type ? receipt.type.replace(/_/g, ' ') : 'TRANSACTION');
   const dateFormatted = formatDisplayDate(receipt.date || receipt.issuedAt);
   const dateTimeFormatted = formatDisplayDateTime(receipt.issuedAt || receipt.date);
   

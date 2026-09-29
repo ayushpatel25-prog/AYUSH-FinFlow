@@ -18,20 +18,18 @@ type ReceiptPrefix = 'LN' | 'RP' | 'ST';
 
 async function generateReceiptNumber(prefix: ReceiptPrefix): Promise<string> {
   const year = new Date().getFullYear();
-  const pattern = `${prefix}-${year}-%`;
+  const pattern = `${prefix}-${year}-`;
 
   // Use raw query to get max receipt number atomically
-  const result = await prisma.$queryRaw<{ receiptNumber: string }[]>`
-    SELECT receiptNumber FROM Receipt
-    WHERE receiptNumber LIKE ${pattern}
-    ORDER BY receiptNumber DESC
-    LIMIT 1
-  `;
+  const lastReceipt = await prisma.receipt.findFirst({
+    where: { receiptNumber: { startsWith: pattern } },
+    orderBy: { receiptNumber: 'desc' },
+    select: { receiptNumber: true },
+  });
 
   let nextSeq = 1;
-  if (result.length > 0) {
-    const lastNumber = result[0].receiptNumber;
-    const seqPart = lastNumber.split('-')[2];
+  if (lastReceipt) {
+    const seqPart = lastReceipt.receiptNumber.split('-')[2];
     nextSeq = parseInt(seqPart, 10) + 1;
   }
 
@@ -301,8 +299,9 @@ export async function generateAndSavePDF(receiptId: string): Promise<string> {
     }
 
     // Row 1: PERSON & TRANSACTION TYPE
+    const transactionType = receipt.type === 'LOAN_LENT' ? 'LEND' : receipt.type === 'LOAN_BORROWED' ? 'BORROW' : (receipt.type || 'TRANSACTION').replace(/_/g, ' ');
     renderCell('PERSON', personName, col1X, y, '#000000', 14);
-    renderCell('TRANSACTION TYPE', receipt.type.replace(/_/g, ' '), col2X, y, '#000000', 13);
+    renderCell('TRANSACTION TYPE', transactionType, col2X, y, '#000000', 13);
 
     // Row 2: PURPOSE & DATE
     y += rowGap;
@@ -381,7 +380,7 @@ export async function generateAndSavePDF(receiptId: string): Promise<string> {
   });
 
   // Update DB with storage key
-  await prisma.receipt.update({
+  await prisma.receipt.updateMany({
     where: { id: receiptId },
     data: { pdfStorageKey },
   });
