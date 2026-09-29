@@ -10,6 +10,7 @@ import { NotificationsDrawer } from './NotificationsDrawer.js';
 import { api } from '../../api/client.js';
 import { Modal } from '../common/Modal.js';
 import { NavLink } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext.js';
 import {
   PieChart,
   Wallet,
@@ -18,9 +19,12 @@ import {
   Sparkles,
   Settings,
   X,
+  LogOut,
 } from 'lucide-react';
 
 export const AppLayout: React.FC = () => {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -184,6 +188,21 @@ export const AppLayout: React.FC = () => {
             <Settings className="w-6 h-6 text-slate-400 mb-1.5" />
             <span className="text-xs font-semibold">Settings</span>
           </NavLink>
+        </div>
+
+        <div className="mt-4 pt-3 border-t border-slate-800">
+          <button
+            type="button"
+            onClick={() => {
+              setIsMobileMoreOpen(false);
+              logout();
+              navigate('/auth', { replace: true });
+            }}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 active:bg-rose-500/30 text-rose-400 border border-rose-500/25 font-semibold text-sm transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Log Out of Account</span>
+          </button>
         </div>
       </Modal>
 
