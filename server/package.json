@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "node scripts/prepare-db.js && tsc",
+    "build": "node scripts/prepare-db.js --push && tsc",
     "postinstall": "node scripts/prepare-db.js",
     "start": "node scripts/prepare-db.js && node dist/index.js",
     "prepare:db": "node scripts/prepare-db.js",

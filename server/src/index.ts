@@ -8,6 +8,15 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+const DEFAULT_NEON_DATABASE_URL =
+  'postgresql://neondb_owner:npg_dKNBhjz4Me0m@ep-billowing-tree-b45dtxzq-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+
+if (!process.env.DATABASE_URL || process.env.DATABASE_URL.startsWith('file:') || process.env.DATABASE_URL.includes('dev.db')) {
+  if (process.env.USE_LOCAL_SQLITE !== 'true') {
+    process.env.DATABASE_URL = DEFAULT_NEON_DATABASE_URL;
+  }
+}
+
 import authRoutes from './routes/authRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
 import accountRoutes from './routes/accountRoutes.js';
@@ -25,6 +34,7 @@ import notificationRoutes from './routes/notificationRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
 import receiptRoutes from './routes/receiptRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import prisma from './prisma.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -72,9 +82,17 @@ const generalLimiter = rateLimit({
 app.use('/api', generalLimiter);
 
 // Health check
-app.get('/api/health', (_req, res) => {
+app.get('/api/health', async (_req, res) => {
+  let dbStatus = 'connected';
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+  } catch (err: any) {
+    dbStatus = 'error: ' + (err?.message || 'unknown error');
+  }
   res.json({
     status: 'healthy',
+    database: dbStatus,
+    dbTarget: process.env.DATABASE_URL?.includes('neon.tech') ? 'PostgreSQL (Neon Cloud 24/7)' : 'Other',
     timestamp: new Date().toISOString(),
     service: 'FinFlow Personal Finance Command Center',
   });

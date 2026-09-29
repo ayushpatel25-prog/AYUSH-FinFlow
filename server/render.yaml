@@ -15,9 +15,9 @@ services:
       - key: PORT
         value: 10000
       - key: DATABASE_URL
-        value: file:./dev.db
+        value: postgresql://neondb_owner:npg_dKNBhjz4Me0m@ep-billowing-tree-b45dtxzq-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
       - key: JWT_SECRET
-        generateValue: true
+        value: finflow_production_jwt_secret_token_secure_permanent_key_2026
       - key: CORS_ORIGIN
         value: "*"
       - key: UPLOAD_DIR

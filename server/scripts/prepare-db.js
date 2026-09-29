@@ -17,7 +17,20 @@ if (fs.existsSync(envPath)) {
   dotenv.config();
 }
 
-const databaseUrl = process.env.DATABASE_URL || 'file:./dev.db';
+export const DEFAULT_NEON_DATABASE_URL =
+  'postgresql://neondb_owner:npg_dKNBhjz4Me0m@ep-billowing-tree-b45dtxzq-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+
+let databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl || databaseUrl.startsWith('file:') || databaseUrl.includes('dev.db')) {
+  if (process.env.USE_LOCAL_SQLITE !== 'true') {
+    console.log('[DB Prepare] Ephemeral/missing database URL detected. Switching to persistent Neon Cloud PostgreSQL.');
+    databaseUrl = DEFAULT_NEON_DATABASE_URL;
+    process.env.DATABASE_URL = databaseUrl;
+  } else {
+    databaseUrl = 'file:./dev.db';
+  }
+}
+
 const isPostgres = databaseUrl.startsWith('postgres://') || databaseUrl.startsWith('postgresql://');
 const targetProvider = isPostgres ? 'postgresql' : 'sqlite';
 
@@ -69,8 +82,8 @@ try {
   process.exit(1);
 }
 
-// If --push argument is passed, safely push schema to the database (creates tables if missing, never drops data)
-if (process.argv.includes('--push')) {
+// If --push argument is passed or in production, safely push schema to the database (creates tables if missing, never drops data)
+if (process.argv.includes('--push') || process.env.NODE_ENV === 'production') {
   try {
     console.log('[DB Prepare] Pushing database schema (non-destructive)...');
     execSync(`${cmd} prisma db push --skip-generate`, { cwd: serverDir, stdio: 'inherit', shell: true });
