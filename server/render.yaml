@@ -5,8 +5,8 @@ services:
     plan: free
     region: oregon
     rootDir: server
-    buildCommand: npm install && npx prisma generate && npx prisma db push && npm run build
-    startCommand: npm start
+    buildCommand: npm install && node scripts/prepare-db.js --push && npm run build
+    startCommand: node scripts/prepare-db.js && npm start
     envVars:
       - key: NODE_ENV
         value: production
