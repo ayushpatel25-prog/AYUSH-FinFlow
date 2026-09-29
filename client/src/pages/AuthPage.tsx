@@ -21,11 +21,14 @@ export const AuthPage: React.FC = () => {
     setIsLoading(true);
     setError('');
 
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password;
+
     try {
       if (isLogin) {
-        await login(email, password);
+        await login(cleanEmail, cleanPassword);
       } else {
-        await register(email, password, name);
+        await register(cleanEmail, cleanPassword, name.trim());
       }
       navigate('/');
     } catch (err: any) {
@@ -119,6 +122,10 @@ export const AuthPage: React.FC = () => {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="name@example.com"
               required
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              autoComplete="email"
             />
 
             <Input
@@ -128,6 +135,7 @@ export const AuthPage: React.FC = () => {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               required
+              autoComplete={isLogin ? 'current-password' : 'new-password'}
             />
 
             <Button type="submit" variant="primary" size="md" className="w-full mt-2" isLoading={isLoading}>

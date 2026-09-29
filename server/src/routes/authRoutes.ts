@@ -5,16 +5,22 @@ import { requireAuth, AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
 
+const emailSchema = z
+  .string({ required_error: 'Email is required' })
+  .min(1, 'Email is required')
+  .transform((val) => val.trim().toLowerCase())
+  .pipe(z.string().email('Please enter a valid email address'));
+
 const registerSchema = z.object({
-  email: z.string().email(),
+  email: emailSchema,
   password: z.string().min(6, 'Password must be at least 6 characters'),
-  name: z.string().min(1, 'Name is required'),
+  name: z.string().trim().min(1, 'Name is required'),
   currency: z.string().optional(),
   currencySymbol: z.string().optional(),
 });
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: emailSchema,
   password: z.string().min(1, 'Password is required'),
 });
 

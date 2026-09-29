@@ -25,11 +25,12 @@ export async function registerUser(data: {
   currency?: string;
   currencySymbol?: string;
 }) {
+  const normalizedEmail = data.email.trim().toLowerCase();
   const existing = await prisma.user.findUnique({
-    where: { email: data.email.toLowerCase().trim() },
+    where: { email: normalizedEmail },
   });
   if (existing) {
-    throw new Error('An account with this email address already exists.');
+    throw new Error('An account with this email address already exists. Please sign in instead.');
   }
 
   const passwordHash = await bcrypt.hash(data.password, 10);
@@ -37,7 +38,7 @@ export async function registerUser(data: {
   return await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
       data: {
-        email: data.email.toLowerCase().trim(),
+        email: normalizedEmail,
         passwordHash,
         name: data.name.trim(),
         currency: data.currency || 'INR',
@@ -46,6 +47,10 @@ export async function registerUser(data: {
         accentColor: 'emerald',
       },
     });
+
+    if (!user || !user.id) {
+      throw new Error('Database insertion failed. Account could not be created.');
+    }
 
     // Create default accounts
     await tx.account.createMany({
@@ -120,8 +125,9 @@ export async function registerUser(data: {
 }
 
 export async function loginUser(data: { email: string; password: string }) {
+  const normalizedEmail = data.email.trim().toLowerCase();
   const user = await prisma.user.findUnique({
-    where: { email: data.email.toLowerCase().trim() },
+    where: { email: normalizedEmail },
   });
 
   if (!user) {
@@ -186,3 +192,74 @@ export async function changePassword(userId: string, data: { currentPassword: st
   });
   return { success: true, message: 'Password updated successfully.' };
 }
+
+export async function ensureDemoUserExists() {
+  try {
+    const demoEmail = 'demo@finflow.io';
+    const existing = await prisma.user.findUnique({ where: { email: demoEmail } });
+    if (!existing) {
+      console.log('⚡ Demo account not found. Auto-seeding demo account...');
+      const passwordHash = await bcrypt.hash('password123', 10);
+      const user = await prisma.user.create({
+        data: {
+          email: demoEmail,
+          passwordHash,
+          name: 'Aditya Sharma',
+          currency: 'INR',
+          currencySymbol: '₹',
+          theme: 'dark',
+          accentColor: 'indigo',
+          monthlyIncomePaise: 8500000,
+        },
+      });
+
+      await prisma.account.createMany({
+        data: [
+          {
+            userId: user.id,
+            name: 'Primary Bank Account',
+            type: 'BANK',
+            openingBalancePaise: 6500000,
+            currentBalancePaise: 7245000,
+            color: '#3b82f6',
+            icon: 'building-2',
+          },
+          {
+            userId: user.id,
+            name: 'Cash in Hand',
+            type: 'CASH',
+            openingBalancePaise: 200000,
+            currentBalancePaise: 200000,
+            color: '#06b6d4',
+            icon: 'banknote',
+          },
+          {
+            userId: user.id,
+            name: 'Paytm UPI Wallet',
+            type: 'WALLET',
+            openingBalancePaise: 350000,
+            currentBalancePaise: 480000,
+            color: '#8b5cf6',
+            icon: 'smartphone',
+          },
+        ],
+      });
+
+      await prisma.category.createMany({
+        data: DEFAULT_CATEGORIES.map((cat) => ({
+          userId: user.id,
+          name: cat.name,
+          type: cat.type,
+          icon: cat.icon,
+          color: cat.color,
+          isSystem: true,
+        })),
+      });
+
+      console.log('✅ Demo account ready: demo@finflow.io / password123');
+    }
+  } catch (err) {
+    console.error('Failed to ensure demo user:', err);
+  }
+}
+

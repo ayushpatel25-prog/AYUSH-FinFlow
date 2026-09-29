@@ -104,8 +104,11 @@ app.use('/api', receiptRoutes);
 // Centralized Error Handling
 app.use(errorHandler);
 
-app.listen(PORT, () => {
+import { ensureDemoUserExists } from './services/authService.js';
+
+app.listen(PORT, async () => {
   console.log(`🚀 FinFlow Server running at http://localhost:${PORT}`);
+  await ensureDemoUserExists();
 });
 
 export default app;

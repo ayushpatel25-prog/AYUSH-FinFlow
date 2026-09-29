@@ -170,132 +170,170 @@ export async function generateAndSavePDF(receiptId: string): Promise<string> {
   const receipt = await prisma.receipt.findUnique({ where: { id: receiptId } });
   if (!receipt) throw new Error('Receipt not found.');
 
-  const meta = JSON.parse(receipt.metadata);
+  let meta: any = {};
+  try {
+    meta = JSON.parse(receipt.metadata || '{}');
+  } catch {
+    meta = {};
+  }
+
   const filePath = path.join(RECEIPTS_DIR, `${receiptId}.pdf`);
   const pdfStorageKey = `receipts/${receiptId}.pdf`;
 
+  // Determine financial values
+  const principalPaise = meta.principalPaise ?? receipt.amountPaise;
+  const remainingPaise = meta.remainingPaise ?? 0;
+  const principalPaidPaise = meta.principalPartPaise ?? (
+    receipt.type === 'LOAN_LENT' || receipt.type === 'LOAN_BORROWED'
+      ? receipt.amountPaise
+      : Math.max(0, principalPaise - remainingPaise)
+  );
+
+  const interestPaise = meta.interestPartPaise ?? 0;
+  const interestText = interestPaise > 0
+    ? formatPdfCurrency(interestPaise)
+    : (meta.interestRate ? `${meta.interestRate}% p.a.` : 'Rs. 0.00');
+
+  const isSettled = !!meta.isSettlement || remainingPaise <= 0;
+  const statusText = isSettled
+    ? 'FULLY SETTLED'
+    : receipt.type === 'REPAYMENT'
+    ? 'PARTIALLY PAID'
+    : 'ACTIVE';
+
+  const statusBg = isSettled ? '#d1fae5' : receipt.type === 'REPAYMENT' ? '#fef3c7' : '#e0e7ff';
+  const statusBorder = isSettled ? '#34d399' : receipt.type === 'REPAYMENT' ? '#fbbf24' : '#818cf8';
+  const statusColor = isSettled ? '#065f46' : receipt.type === 'REPAYMENT' ? '#78350f' : '#1e1b4b';
+
+  const dateStr = new Date(meta.paymentDate || meta.loanDate || receipt.createdAt).toLocaleDateString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric'
+  });
+
+  const dueDateStr = meta.dueDate
+    ? new Date(meta.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    : 'N/A';
+
+  const verifyHost = process.env.CORS_ORIGIN && process.env.CORS_ORIGIN !== '*'
+    ? process.env.CORS_ORIGIN.split(',')[0].trim()
+    : 'https://ayush-finflow-app.vercel.app';
+  const verifyUrl = `${verifyHost}/verify/${receipt.verificationId}`;
+
   await new Promise<void>((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'A4', margins: { top: 60, left: 60, right: 60, bottom: 60 } });
+    // Single page A4 (595.28 x 841.89) with explicit margins: 0 to prevent extra blank pages
+    const doc = new PDFDocument({
+      size: 'A4',
+      margins: { top: 0, bottom: 0, left: 0, right: 0 },
+      autoFirstPage: true,
+    });
+
     const stream = fs.createWriteStream(filePath);
     doc.pipe(stream);
 
-    const W = 595.28 - 120; // usable width
+    const marginX = 45;
+    const contentW = 505.28;
 
-    // ── Header Bar ──────────────────────────────────────────────
-    doc.rect(0, 0, 595.28, 90).fill('#0f172a');
+    // ── 1. Header Bar ──────────────────────────────────────────────
+    doc.rect(0, 0, 595.28, 80).fill('#0f172a');
 
     doc.fillColor('#10b981').fontSize(22).font('Helvetica-Bold')
-      .text('FinFlow', 60, 28);
+      .text('FinFlow', marginX, 20);
     doc.fillColor('#94a3b8').fontSize(8.5).font('Helvetica')
-      .text('Personal Finance Command Center • Official Digital Receipt', 60, 55);
+      .text('Personal Finance Command Center • Certified Digital Receipt', marginX, 48);
 
-    const label = labelForType(receipt.type, meta.loanType);
-    doc.fillColor('#ffffff').fontSize(11).font('Helvetica-Bold')
-      .text(label, 60, 28, { align: 'right' });
+    doc.fillColor('#ffffff').fontSize(13).font('Helvetica-Bold')
+      .text('PAYMENT RECEIPT', 350, 20, { width: 200, align: 'right' });
     doc.fillColor('#10b981').fontSize(9).font('Helvetica-Bold')
-      .text(receipt.receiptNumber, 60, 44, { align: 'right' });
+      .text('Verified • Official Record', 350, 38, { width: 200, align: 'right' });
+    doc.fillColor('#94a3b8').fontSize(8.5).font('Helvetica')
+      .text(`Receipt #: ${receipt.receiptNumber}`, 350, 52, { width: 200, align: 'right' });
 
-    // ── Receipt Amount Box (Classic Navy Dark Box) ────────────────
-    let y = 110;
-    doc.fillColor('#0f172a').rect(60, y, W, 78).fill();
+    // ── 2. Prominent Dark Navy Amount Card ────────────────────────
+    let y = 100;
+    doc.roundedRect(marginX, y, contentW, 76, 8).fill('#0f172a');
 
-    doc.fillColor('#10b981').fontSize(9).font('Helvetica-Bold')
-      .text('AMOUNT', 80, y + 15);
-    doc.fillColor('#ffffff').fontSize(28).font('Helvetica-Bold')
-      .text(formatPdfCurrency(receipt.amountPaise), 80, y + 30);
+    doc.fillColor('#10b981').fontSize(9.5).font('Helvetica-Bold')
+      .text('AMOUNT', marginX + 20, y + 14);
     doc.fillColor('#94a3b8').fontSize(9).font('Helvetica')
-      .text(`Receipt #: ${receipt.receiptNumber}`, 80, y + 58, { align: 'right' });
+      .text(receipt.currency || 'INR', 350, y + 14, { width: 180, align: 'right' });
 
-    y += 98;
+    doc.fillColor('#ffffff').fontSize(28).font('Helvetica-Bold')
+      .text(formatPdfCurrency(receipt.amountPaise), marginX + 20, y + 30);
 
-    // ── Two-column details with Pure Pitch-Black Bold Values ───────
-    const colL = 60;
-    const colR = 60 + W / 2 + 10;
-    const fieldH = 28;
+    // ── 3. Two-Column Information Grid ────────────────────────────
+    y = 195;
+    const col1X = marginX;
+    const col2X = marginX + contentW / 2 + 15;
+    const rowGap = 44;
 
-    function field(label: string, value: string, x: number, fy: number, valueColor = '#000000') {
-      // Heading label
-      doc.fillColor('#334155').fontSize(8.5).font('Helvetica-Bold').text(label.toUpperCase(), x, fy);
-      // Value under heading - Extra Bold, Large, Pitch Black
-      doc.fillColor(valueColor).fontSize(12).font('Helvetica-Bold').text(value, x, fy + 12);
+    function renderCell(label: string, value: string, x: number, cy: number, valColor = '#000000', valSize = 13) {
+      doc.fillColor('#475569').fontSize(8.5).font('Helvetica-Bold').text(label.toUpperCase(), x, cy);
+      doc.fillColor(valColor).fontSize(valSize).font('Helvetica-Bold').text(value, x, cy + 12);
     }
 
-    // Person & Transaction Type - bold pitch black
-    field('Person', meta.person || '—', colL, y, '#000000');
-    field('Transaction Type', receipt.type.replace(/_/g, ' '), colR, y, '#000000');
-    y += fieldH + 6;
+    // Row 1: PERSON & TRANSACTION TYPE
+    renderCell('PERSON', meta.person || 'N/A', col1X, y, '#000000', 15);
+    renderCell('TRANSACTION TYPE', receipt.type.replace(/_/g, ' '), col2X, y, '#000000', 13);
 
-    // Purpose & Date - bold pitch black
-    field('Purpose', meta.purpose || '—', colL, y, '#000000');
-    field('Date', new Date(receipt.createdAt).toLocaleDateString('en-IN', {
-      day: '2-digit', month: 'short', year: 'numeric'
-    }), colR, y, '#000000');
-    y += fieldH + 6;
+    // Row 2: PURPOSE & DATE
+    y += rowGap;
+    renderCell('PURPOSE', meta.purpose || 'Peer Transaction', col1X, y, '#000000', 12);
+    renderCell('DATE', dateStr, col2X, y, '#000000', 12);
 
-    // Principal & Due Date - bold pitch black
-    field('Principal Amount', formatPdfCurrency(meta.principalPaise), colL, y, '#000000');
-    if (meta.dueDate) {
-      field('Due Date', new Date(meta.dueDate).toLocaleDateString('en-IN', {
-        day: '2-digit', month: 'short', year: 'numeric'
-      }), colR, y, '#000000');
-    }
-    y += fieldH + 6;
+    // Row 3: PRINCIPAL AMOUNT & INTEREST
+    y += rowGap;
+    renderCell('PRINCIPAL AMOUNT', formatPdfCurrency(principalPaise), col1X, y, '#000000', 13);
+    renderCell('INTEREST', interestText, col2X, y, '#000000', 13);
 
-    if (receipt.type === 'REPAYMENT' || receipt.type === 'SETTLEMENT') {
-      field('Principal Part Repaid', formatPdfCurrency(meta.principalPartPaise || 0), colL, y, '#000000');
-      field('Interest Part', formatPdfCurrency(meta.interestPartPaise || 0), colR, y, '#000000');
-      y += fieldH + 6;
+    // Row 4: PRINCIPAL PAID & STATUS
+    y += rowGap;
+    renderCell('PRINCIPAL PAID', formatPdfCurrency(principalPaidPaise), col1X, y, '#000000', 13);
 
-      const remainColor = meta.remainingPaise <= 0 ? '#059669' : '#d97706';
-      field('Remaining Balance', formatPdfCurrency(meta.remainingPaise), colL, y, remainColor);
-      field('Status', meta.isSettlement ? 'FULLY SETTLED ✓' : 'PARTIALLY PAID', colR, y,
-        meta.isSettlement ? '#059669' : '#d97706');
-      y += fieldH + 6;
-    }
+    // Status Badge
+    doc.fillColor('#475569').fontSize(8.5).font('Helvetica-Bold').text('STATUS', col2X, y);
+    doc.roundedRect(col2X, y + 12, 125, 20, 4).fill(statusBg);
+    doc.strokeColor(statusBorder).lineWidth(1).roundedRect(col2X, y + 12, 125, 20, 4).stroke();
+    doc.fillColor(statusColor).fontSize(9.5).font('Helvetica-Bold')
+      .text(statusText, col2X, y + 16, { width: 125, align: 'center' });
 
-    if (meta.interestRate > 0) {
-      field('Interest Rate', `${meta.interestRate}% p.a.`, colL, y, '#000000');
-      y += fieldH + 6;
-    }
+    // Row 5: REMAINING BALANCE & DUE DATE
+    y += rowGap;
+    const remainColor = isSettled ? '#059669' : '#000000';
+    renderCell('REMAINING BALANCE', formatPdfCurrency(remainingPaise), col1X, y, remainColor, 13);
+    renderCell('DUE DATE', dueDateStr, col2X, y, '#000000', 12);
 
-    if (meta.notes) {
-      y += 4;
-      doc.fillColor('#334155').fontSize(8.5).font('Helvetica-Bold').text('NOTES', colL, y);
-      doc.fillColor('#000000').fontSize(11).font('Helvetica-Bold').text(meta.notes, colL, y + 12, { width: W });
-      y += 34;
-    }
+    // ── 5. NOTES (Dedicated container below grid) ──────────────────
+    y += rowGap + 6;
+    doc.fillColor('#475569').fontSize(8.5).font('Helvetica-Bold').text('NOTES', marginX, y);
+    doc.roundedRect(marginX, y + 12, contentW, 40, 6).fill('#f8fafc');
+    doc.strokeColor('#cbd5e1').lineWidth(1).roundedRect(marginX, y + 12, contentW, 40, 6).stroke();
+    doc.fillColor('#000000').fontSize(10.5).font('Helvetica-Bold')
+      .text(meta.notes || 'N/A', marginX + 12, y + 24, { width: contentW - 24 });
 
-    // ── Divider ────────────────────────────────────────────────
-    y += 10;
-    doc.strokeColor('#94a3b8').lineWidth(1.2).moveTo(60, y).lineTo(60 + W, y).stroke();
-    y += 16;
+    // ── 6. VERIFICATION SECTION ────────────────────────────────────
+    y += 66;
+    doc.strokeColor('#94a3b8').lineWidth(1).moveTo(marginX, y).lineTo(marginX + contentW, y).stroke();
 
-    // ── Verification Box ───────────────────────────────────────
-    doc.fillColor('#f1f5f9').rect(60, y, W, 50).fill();
-    doc.strokeColor('#cbd5e1').lineWidth(1).rect(60, y, W, 50).stroke();
+    y += 12;
+    doc.roundedRect(marginX, y, contentW, 52, 6).fill('#f1f5f9');
+    doc.strokeColor('#cbd5e1').lineWidth(1).roundedRect(marginX, y, contentW, 52, 6).stroke();
 
-    doc.fillColor('#334155').fontSize(8.5).font('Helvetica-Bold')
-      .text('VERIFICATION ID', 75, y + 10);
-    doc.fillColor('#000000').fontSize(12).font('Helvetica-Bold')
-      .text(receipt.verificationId, 75, y + 24);
+    doc.fillColor('#475569').fontSize(8.5).font('Helvetica-Bold').text('VERIFICATION ID', marginX + 15, y + 10);
+    doc.fillColor('#000000').fontSize(13).font('Courier-Bold').text(receipt.verificationId, marginX + 15, y + 24);
 
-    doc.fillColor('#334155').fontSize(8.5).font('Helvetica-Bold')
-      .text('VERIFY AT', 75 + W / 2, y + 10);
-    doc.fillColor('#2563eb').fontSize(9.5).font('Helvetica-Bold')
-      .text(`${process.env.CORS_ORIGIN || 'https://ayush-finflow-app.vercel.app'}/verify/${receipt.verificationId}`, 75 + W / 2, y + 24);
+    doc.fillColor('#475569').fontSize(8.5).font('Helvetica-Bold').text('VERIFY AT', col2X, y + 10);
+    doc.fillColor('#1d4ed8').fontSize(9.5).font('Helvetica-Bold').text(verifyUrl, col2X, y + 25);
 
-    // ── Footer ─────────────────────────────────────────────────
-    doc.fillColor('#f1f5f9').rect(0, 775, 595.28, 67).fill();
-    doc.strokeColor('#e2e8f0').lineWidth(1).moveTo(0, 775).lineTo(595.28, 775).stroke();
-    doc.fillColor('#475569').fontSize(8).font('Helvetica')
+    // ── 7. FOOTER ──────────────────────────────────────────────────
+    y = 745;
+    doc.strokeColor('#e2e8f0').lineWidth(1).moveTo(marginX, y).lineTo(marginX + contentW, y).stroke();
+    doc.fillColor('#475569').fontSize(8.5).font('Helvetica-Bold')
+      .text('Generated electronically by FinFlow Personal Finance Command Center', marginX, y + 10, {
+        align: 'center', width: contentW
+      });
+    doc.fillColor('#64748b').fontSize(8).font('Helvetica')
       .text(
-        'This is an authentic, computer-generated receipt from FinFlow Personal Finance Command Center.',
-        60, 790, { align: 'center', width: W }
-      );
-    doc.fillColor('#64748b').fontSize(7.5).font('Helvetica')
-      .text(
-        `Issued At: ${new Date(receipt.createdAt).toLocaleString('en-IN')} • Digital Proof ID: ${receipt.verificationId}`,
-        60, 804, { align: 'center', width: W }
+        `Issued At: ${new Date(receipt.createdAt).toLocaleString('en-IN')} • Authentic Proof ID: ${receipt.verificationId}`,
+        marginX, y + 22, { align: 'center', width: contentW }
       );
 
     doc.end();
